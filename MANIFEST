@@ -1,0 +1,11 @@
+Changes
+COPYING
+Makefile.PL
+MANIFEST
+MANIFEST.SKIP
+README
+lib/Test/Assertions.pm
+lib/Test/Assertions/Manual.pod
+t/Test-Assertions.t
+t/Test-Assertion_style.pl
+t/fails.pl
