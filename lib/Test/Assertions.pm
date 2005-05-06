@@ -2,7 +2,7 @@ package Test::Assertions;
 
 use strict;
 @Test::Assertions::EXPORT = qw(DIED COMPILES EQUAL EQUALS_FILE MATCHES_FILE FILES_EQUAL ASSESS ASSESS_FILE INTERPRET tests READ_FILE WRITE_FILE);
-$Test::Assertions::VERSION = sprintf"%d.%03d", q$Revision: 1.50 $ =~ /: (\d+)\.(\d+)/;
+$Test::Assertions::VERSION = sprintf"%d.%03d", q$Revision: 1.51 $ =~ /: (\d+)\.(\d+)/;
 
 #Define constants
 #(avoid "use constant" to cut compile-time overhead slightly - it *is* measurable)
@@ -637,7 +637,7 @@ L<Test::Assertions::Manual> - A guide to using Test::Assertions
 
 =head1 VERSION
 
-$Revision: 1.50 $ on $Date: 2005/05/03 19:08:02 $ by $Author: johna $
+$Revision: 1.51 $ on $Date: 2005/05/06 12:33:20 $ by $Author: piersk $
 
 =head1 AUTHOR
 
@@ -651,3 +651,4 @@ John Alden with additions from Piers Kent and Simon Flack
 See the file COPYING in this distribution, or http://www.gnu.org/licenses/gpl.txt 
 
 =cut
+
