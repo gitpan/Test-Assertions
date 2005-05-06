@@ -2,7 +2,7 @@
 
 #
 # Unit test for Test::Assertions
-# $Id: Test-Assertions.t,v 1.17 2004/12/20 12:17:22 tims Exp $
+# $Id: Test-Assertions.t,v 1.19 2005/03/09 12:08:29 colinr Exp $
 #
 # Options:
 # -s : save output files
@@ -35,7 +35,7 @@ unlink($file1, $file2, $file3);
 die("Unable to clean up output files") if(-e $file1 || -e $file2 || -e $file3);
 
 #Tests
-plan tests => 54;
+plan tests => 57;
 chdir('t') if -d 't';
 
 ASSERT(1, 'compiled');
@@ -59,6 +59,7 @@ ASSERT(DIED(sub  {die()} ), 'die() is detected');
 ASSERT(ASSESS_FILE("perl fails.pl") =~ /not ok/, 'a failing script is seen as failing');
 ASSERT(ASSESS(["not ok"]) =~ /not ok/, 'check that "not ok" is assessed ok');
 ASSERT(ASSESS(["ok"]) !~ /not ok/, 'check that "ok" is assessed ok');
+ASSERT(ASSESS(["1..3","ok","ok"]) =~ /not ok/, 'check that wrong number of tests is not ok');
 my @list = ASSESS(["not ok"], "assess in list context");
 ASSERT(!$list[0], $list[1]);
 @list = ASSESS(["ok"], "assess in list context"), 
@@ -168,6 +169,16 @@ ASSERT(1);');
 system("$^X $file3 > $file1 2> $file2");
 ASSERT( scalar(READ_FILE($file1) =~ m/1\.\.2.*ok 1/s), "child process writes to $file1");
 ASSERT( scalar(READ_FILE($file2) =~ m/# Looks like.*2.*1/s), "child process writes to $file2");
+
+# plan tests with a chdir
+WRITE_FILE($file3, 'use strict;use lib qw(./lib ../lib);
+use Test::Assertions qw(test);
+chdir("..");
+plan tests;
+ASSERT(1);');
+system("$^X $file3 > $file1 2> $file2");
+ASSERT( scalar(READ_FILE($file1) =~ m/1\.\.1.*ok 1/s), "child process writes to $file1");
+ASSERT( length(READ_FILE($file2)) == 0, "child process writes nothing to $file2");
 
 
 WRITE_FILE($file3, 'use strict;use lib qw(./lib ../lib);

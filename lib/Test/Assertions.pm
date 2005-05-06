@@ -1,19 +1,15 @@
 package Test::Assertions;
-use Carp;
-use vars qw($test_no $VERSION @EXPORT %ignore %only $use_ok $test_mode $planned_tests);
-use constant tests => 0;
-@EXPORT = qw(DIED COMPILES EQUAL EQUALS_FILE MATCHES_FILE FILES_EQUAL ASSESS ASSESS_FILE INTERPRET tests READ_FILE WRITE_FILE);
 
-# this is the number of the current test, for automatically
-# numbering the output of ASSERT
-$test_no = 0;
-# this is a flag - true if we are imported in a testing mode
-$test_mode = 0;
+use strict;
+@Test::Assertions::EXPORT = qw(DIED COMPILES EQUAL EQUALS_FILE MATCHES_FILE FILES_EQUAL ASSESS ASSESS_FILE INTERPRET tests READ_FILE WRITE_FILE);
+$Test::Assertions::VERSION = sprintf"%d.%03d", q$Revision: 1.50 $ =~ /: (\d+)\.(\d+)/;
 
-# a flag, so that alarm() is never called if it isn't present (e.g. on Windows)
-use constant HAVE_ALARM => 1;
+#Define constants
+#(avoid "use constant" to cut compile-time overhead slightly - it *is* measurable)
 BEGIN
 {
+	*tests = sub () {1};      # constant to export
+	*HAVE_ALARM = sub () {1}; # a flag, so that alarm() is never called if it isn't present (e.g. on Windows)
 	eval
 	{
 		my $was = alarm 0;
@@ -22,14 +18,19 @@ BEGIN
 	undef *HAVE_ALARM, *HAVE_ALARM = sub () {0} if($@); #Change the constant!
 }
 
-$VERSION = sprintf"%d.%03d", q$Revision: 1.47 $ =~ /: (\d+)\.(\d+)/;
+# this is the number of the current test, for automatically
+# numbering the output of ASSERT
+$Test::Assertions::test_no = 0;
+# this is a flag - true if we are imported in a testing mode
+$Test::Assertions::test_mode = 0;
 
 sub import
 {
 	my $pkg = shift;
 	my $style = shift;
 	my $callpkg = caller(0);
-	foreach my $sym (@EXPORT) {
+	no strict 'refs';
+	foreach my $sym (@Test::Assertions::EXPORT) {
 		*{"$callpkg\::$sym"} = \&{"$pkg\::$sym"};
 	}
 
@@ -50,13 +51,15 @@ sub import
 		*{"$callpkg\::ASSERT"} = \&{"$pkg\::ASSERT_cluck"};
 	}
 	elsif($style eq 'test' || $style eq 'test/ok') {
-		$use_ok = $style eq 'test/ok';
+		require File::Spec;
+		$Test::Assertions::calling_script = File::Spec->rel2abs($0);
+		$Test::Assertions::use_ok = $style eq 'test/ok';
 		*{"$callpkg\::ASSERT"} = \&{"$pkg\::ASSERT_test"};
 		*{"$callpkg\::ok"} = \&{"$pkg\::ASSERT_test"} if($style eq 'test/ok');
 		*{"$callpkg\::plan"} = \&{"$pkg\::plan"};
 		*{"$callpkg\::ignore"} = \&{"$pkg\::ignore"};
 		*{"$callpkg\::only"} = \&{"$pkg\::only"};
-		$test_mode = 1;
+		$Test::Assertions::test_mode = 1;
 	}
 	else {
 		croak("Test::Assertions imported with unknown directive: $style");
@@ -68,20 +71,19 @@ sub plan
 {
 	shift(); #tests
 	my $number = shift();
-	my ($pkg, $filename, $line, $sub) = caller(0);
-	$number = _count_tests($filename)
+	$number = _count_tests($Test::Assertions::calling_script)
 		unless (defined($number) && $number =~ /^\d+$/);
 	print "1..$number\n";
-	$planned_tests = $number;
+	$Test::Assertions::planned_tests = $number;
 	return $number;
 }
 
 END
 {
 	# if we're in test mode and plan() has been called, ensure that the right number of tests have been run
-	if ($test_mode && defined($planned_tests)) {
-		if ($test_no != $planned_tests) {
-			warn "# Looks like you planned $planned_tests tests but actually ran $test_no.\n";
+	if ($Test::Assertions::test_mode && defined($Test::Assertions::planned_tests)) {
+		if ($Test::Assertions::test_no != $Test::Assertions::planned_tests) {
+			warn "# Looks like you planned $Test::Assertions::planned_tests tests but actually ran $Test::Assertions::test_no.\n";
 		}
 	}
 }
@@ -89,12 +91,12 @@ END
 #Test filtering
 sub ignore
 {
-	%ignore = map {$_ => 1} @_;
+	%Test::Assertions::ignore = map {$_ => 1} @_;
 }
 
 sub only
 {
-	%only = map {$_ => 1} @_;
+	%Test::Assertions::only = map {$_ => 1} @_;
 }
 
 
@@ -106,14 +108,15 @@ sub ASSERT_test ($;$)
 {
 	my ($test,$msg) = @_;
 	my ($pkg, $filename, $line, $sub) = caller(0);
-	$test_no++;
-	if($ignore{$test_no} || %only && !$only{$test_no})
+	$Test::Assertions::test_no++;
+	if($Test::Assertions::ignore{$Test::Assertions::test_no} || 
+	   %Test::Assertions::only && !$Test::Assertions::only{$Test::Assertions::test_no})
 	{
-		print "ok - skipped $test_no";
+		print "ok - skipped $Test::Assertions::test_no";
 	}
 	else
 	{
-		print ($test?"ok $test_no":"not ok $test_no at line $line in $filename");
+		print ($test?"ok $Test::Assertions::test_no":"not ok $Test::Assertions::test_no at line $line in $filename");
 	}
 	print " ($msg)" if(defined $msg);
 	print "\n";
@@ -141,6 +144,7 @@ sub ASSERT_confess ($;$)
 {
 	my $test = shift;
 	my $msg = shift;
+	require Carp;
 	$msg="($msg)" if(defined $msg);
 	my ($pkg, $filename, $line, $sub);
 	if (caller(1)) {
@@ -148,13 +152,14 @@ sub ASSERT_confess ($;$)
 	} else {
 		($pkg, $filename, $line, $sub) = caller(0);
 	}
-	confess("Assertion failure at line $line in $filename $msg\n") unless($test);
+	Carp::confess("Assertion failure at line $line in $filename $msg\n") unless($test);
 }
 
 sub ASSERT_cluck ($;$)
 {
 	my $test = shift;
 	my $msg = shift;
+	require Carp;
 	$msg="($msg)" if(defined $msg);
 	my ($pkg, $filename, $line, $sub);
 	if (caller(1)) {
@@ -223,10 +228,6 @@ sub MATCHES_FILE
 	return($lhs =~ /^$regex$/);
 }
 
-#
-# Collation of tests
-#
-
 sub ASSESS_FILE
 {
 	my ($file, $verbose, $timeout) = @_;
@@ -257,6 +258,14 @@ sub ASSESS
 	my ($tests, $name, $verbose) = @_;
 	my $errors = 0;
 	my $total = 0;
+	my $expected;
+	if (${$tests}[0] =~ m/^1\.\.(\d+)$/) {
+		$expected = $1;
+	}
+	else
+	{
+		$expected = -1;
+	}
 	foreach(@$tests)
 	{
 		if(/^not ok/)
@@ -279,6 +288,10 @@ sub ASSESS
 	if($errors)
 	{
 		$rs = "not ok$name ($errors errors in $total tests)\n";
+	}
+	elsif($expected != -1 && $total != $expected)
+	{
+		$rs = "not ok$name (Expected $expected tests, ran $total tests)\n";
 	}
 	else
 	{
@@ -319,9 +332,7 @@ sub WRITE_FILE
 	return $success;
 }
 
-#
 # Misc subroutines
-#
 
 sub _count_tests
 {
@@ -332,7 +343,7 @@ sub _count_tests
 	while(<LI>)
 	{
 		$count++ if(/\bASSERT[\s\(]/);
-		$count++ if($use_ok && /\bok[\s\(]/);
+		$count++ if($Test::Assertions::use_ok && /\bok[\s\(]/);
 	}
 	close LI;
 	return $count;
@@ -363,6 +374,8 @@ sub _write_file
 sub TRACE {}
 
 1;
+
+__END__
 
 =head1 NAME
 
@@ -584,28 +597,37 @@ Returns undef if file cannot be written.
 
 =back
 
+=head1 OVERHEAD
+
+When Test::Assertions is imported with no arguments, ASSERT is aliased to an empty coderef.
+If this is still too much runtime overhead for you, you can use a constant to optimise out ASSERT statements at compile time.
+See the section on runtime testing in L<Test::Assertions::Manual> for a discussion of overheads, some examples and some benchmark results.
+
 =head1 DEPENDENCIES
 
+The following modules are loaded on demand:
+
  Carp
- Test::More (loaded on demand)
- File::Compare (loaded on demand)
- IO::CaptureOutput (loaded on demand)
+ File::Spec
+ Test::More
+ File::Compare
+ IO::CaptureOutput
 
 =head1 RELATED MODULES
 
 =over 4
 
-=item *
+=item L<Test> and L<Test::Simple>
 
-Test and Test::Simple
+Minimal unit testing modules
 
-=item *
+=item L<Test::More>
 
-Test::More
+Richer unit testing toolkit compatible with Test and Test::Simple
 
-=item *
+=item L<Carp::Assert>
 
-Carp::Assert
+Runtime testing toolkit
 
 =back
 
@@ -615,7 +637,7 @@ L<Test::Assertions::Manual> - A guide to using Test::Assertions
 
 =head1 VERSION
 
-$Revision: 1.47 $ on $Date: 2005/01/12 13:58:13 $ by $Author: johna $
+$Revision: 1.50 $ on $Date: 2005/05/03 19:08:02 $ by $Author: johna $
 
 =head1 AUTHOR
 

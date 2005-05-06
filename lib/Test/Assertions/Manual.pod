@@ -174,28 +174,151 @@ You can use Test::Assertions to do this:
 	$rv = some_function();
 	ASSERT($rv == 0, "some_function returned a non-zero value");
 
-You can use a constant to allow you to switch this off without leaving any residual runtime overhead:
-
-	use constant ENABLE_ASSERTIONS => $ENV{ENABLE_ASSERTIONS};
-	if(ENABLE_ASSERTIONS) {
-		require Test::Assertions;
-		import Test::Assertions qq(die);
-	}
-	$rv = some_function();
-	ASSERT($rv == 0, "some_function returned a non-zero value") if(ENABLE_ASSERTIONS);
-
 You can also import Test::Assertions with warn rather than die so that the code continues executing:
 
 	use constant ASSERTIONS_MODE => $ENV{ENVIRONMENT} eq 'production'? 'warn' : 'die';
 	use Test::Assertions(ASSERTIONS_MODE);
 
+Environment variables provide a nice way of switching compile-time behaviour from outside the process.
+
+=head2 Minimising overhead
+
+Importing Test::Assertions with no arguments results in ASSERT statements doing nothing, but unlike ASSERT macros in C where the preprocessor
+filters this out before compilation, there are 2 types of residual overhead:
+
+=over 4
+
+=item Runtime overhead
+
+When Test::Assertions is imported with no arguments, the ASSERT statement is aliased to an empty sub.
+There is a small overhead in executing this.  In practice, unless you do an ASSERT on every other line, 
+or in a performance-critical loop, you're unlikely to notice the overhead compared to the other work that your code is doing.
+
+=item Compilation overhead
+
+The Test::Assertions module must be compiled even when it is imported with no arguments.
+Test::Assertions loads its helper modules on demand and avoids using pragmas to minimise its compilation overhead.
+Currently Test::Assertions does not go to more extreme measures to cut its compilation overhead in the interests of maintainability
+and ease of installation.
+  
+=back
+
+Both can be minimised by using a constant:
+
+	use constant ENABLE_ASSERTIONS => $ENV{ENABLE_ASSERTIONS};
+
+	#Minimise compile-time overhead
+	if(ENABLE_ASSERTIONS) {
+		require Test::Assertions;
+		import Test::Assertions qq(die);
+	}
+
+	$rv = some_function();
+	
+	#Eliminate runtime overhead
+	ASSERT($rv == 0, "some_function returned a non-zero value") if(ENABLE_ASSERTIONS);
+
+Unlike Carp::Assert, Test::Assertions does not come with a "built-in" constant (DEBUG in the case of Carp::Assert).
+Define your own constant, attach it to your own compile-time logic (e.g. env vars) and call it whatever you like.
+
+=head2 How expensive is a null ASSERT?
+
+Here's an indication of the overhead of calling ASSERT when Test::Assertions is imported with no arguments.
+A comparison is included with Carp::Assert just to show that it's in the same ballpark - we are not advocating one module over the other.
+As outlined above, using a constant to disable assertions is recommended in performance-critical code.
+
+	#!/usr/local/bin/perl
+	
+	use Benchmark;
+	use Test::Assertions;
+	use Carp::Assert;
+	use constant ENABLE_ASSERTIONS => 0;
+	
+	#Compare null ASSERT to simple linear algebra statement
+	timethis(1e6, sub{
+		ASSERT(1); #Test::Assertions
+	});
+	timethis(1e6, sub{
+		assert(1); #Carp::Assert
+	});
+	timethis(1e6, sub{
+		ASSERT(1) if ENABLE_ASSERTIONS;
+	});
+	timethis(1e6, sub{
+		$x=$x*2 + 3;
+	});
+
+Results on Sun E250 (with 2x400Mhz CPUs) running perl 5.6.1 on solaris 9:
+
+	Test::Assertions:           timethis 1000000:  3 wallclock secs ( 3.88 usr +  0.00 sys =  3.88 CPU) @ 257731.96/s (n=1000000)
+	Carp::Assert:               timethis 1000000:  6 wallclock secs ( 6.08 usr +  0.00 sys =  6.08 CPU) @ 164473.68/s (n=1000000)
+	Test::Assertions + const:   timethis 1000000: -1 wallclock secs ( 0.07 usr +  0.00 sys =  0.07 CPU) @ 14285714.29/s (n=1000000) (warning: too few iterations for a reliable count)
+	some algebra:               timethis 1000000:  1 wallclock secs ( 2.50 usr +  0.00 sys =  2.50 CPU) @ 400000.00/s (n=1000000)
+
+Results for 1.7Ghz pentium M running activestate perl 5.6.1 on win XP:
+
+	Test::Assertions:           timethis 1000000:  0 wallclock secs ( 0.42 usr +  0.00 sys =  0.42 CPU) @ 2380952.38/s (n=1000000)
+	Carp::Assert:               timethis 1000000:  0 wallclock secs ( 0.57 usr +  0.00 sys =  0.57 CPU) @ 1751313.49/s (n=1000000)
+	Test::Assertions + const:   timethis 1000000: -1 wallclock secs (-0.02 usr +  0.00 sys = -0.02 CPU) @ -50000000.00/s (n=1000000) (warning: too few iterations for a reliable count)
+	some algebra:               timethis 1000000:  0 wallclock secs ( 0.50 usr +  0.00 sys =  0.50 CPU) @ 1996007.98/s (n=1000000)
+
+=head2 How significant is the compile-time overhead?
+
+Here's an indication of the compile-time overhead for Test::Assertions v1.050 and Carp::Assert v0.18.
+The cost of running import() is also included.
+
+	#!/usr/local/bin/perl
+	
+	use Benchmark;
+	use lib qw(../lib);
+	
+	timethis(3e2, sub {
+		require Test::Assertions;
+		delete $INC{"Test/Assertions.pm"};
+	});
+	
+	timethis(3e2, sub {
+		require Test::Assertions;
+		import Test::Assertions;
+		delete $INC{"Test/Assertions.pm"};
+	});
+	
+	timethis(3e2, sub {
+		require Carp::Assert;
+		delete $INC{"Carp/Assert.pm"};
+	});
+	
+	timethis(3e2, sub {
+		require Carp::Assert;
+		import Carp::Assert;
+		delete $INC{"Carp/Assert.pm"};
+	});
+	
+Results on Sun E250 (with 2x400Mhz CPUs) running perl 5.6.1 on solaris 9:
+
+	Test::Assertions:           timethis 300:  6 wallclock secs ( 6.19 usr +  0.10 sys =  6.29 CPU) @ 47.69/s (n=300)
+	Test::Assertions + import:  timethis 300:  7 wallclock secs ( 6.56 usr +  0.03 sys =  6.59 CPU) @ 45.52/s (n=300)
+	Carp::Assert:               timethis 300:  3 wallclock secs ( 2.47 usr +  0.32 sys =  2.79 CPU) @ 107.53/s (n=300)
+	Carp::Assert + import:      timethis 300: 41 wallclock secs (40.58 usr +  0.32 sys = 40.90 CPU) @  7.33/s (n=300)
+
+Results for 1.7Ghz pentium M running activestate perl 5.6.1 on win XP:
+	
+	Test::Assertions:           timethis 300:  2 wallclock secs ( 1.45 usr +  0.21 sys =  1.66 CPU) @ 180.51/s (n=300)
+	Test::Assertions + import:  timethis 300:  2 wallclock secs ( 1.58 usr +  0.29 sys =  1.87 CPU) @ 160.26/s (n=300)
+	Carp::Assert:               timethis 300:  1 wallclock secs ( 0.99 usr +  0.26 sys =  1.25 CPU) @ 239.62/s (n=300)
+	Carp::Assert + import:      timethis 300:  6 wallclock secs ( 5.42 usr +  0.38 sys =  5.80 CPU) @ 51.74/s (n=300)
+
+If using a constant to control compilation is not to your liking, 
+you may want to experiment with SelfLoader or AutoLoader to cut down the compilation overhead further by delaying
+compilation of some of the subroutines in Test::Assertions (see L<SelfLoader> and L<AutoLoader> for more information)
+until the first time they are used.
+
 =head1 VERSION
 
-$Revision: 1.7 $ on $Date: 2004/12/14 10:13:54 $
+$Revision: 1.10 $ on $Date: 2005/05/04 15:56:39 $
 
 =head1 AUTHOR
 
-John Alden
-<cpan _at_ bbc _dot_ co _dot_ uk>
+John Alden <cpan _at_ bbc _dot_ co _dot_ uk>
 
 =cut
