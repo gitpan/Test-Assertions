@@ -2,7 +2,7 @@
 
 #
 # Unit test for Test::Assertions
-# $Id: Test-Assertions.t,v 1.19 2005/03/09 12:08:29 colinr Exp $
+# $Id: Test-Assertions.t,v 1.21 2006/01/20 12:22:12 tims Exp $
 #
 # Options:
 # -s : save output files
@@ -175,15 +175,14 @@ WRITE_FILE($file3, 'use strict;use lib qw(./lib ../lib);
 use Test::Assertions qw(test);
 chdir("..");
 plan tests;
+#ASSERT(0)
 ASSERT(1);');
 system("$^X $file3 > $file1 2> $file2");
 ASSERT( scalar(READ_FILE($file1) =~ m/1\.\.1.*ok 1/s), "child process writes to $file1");
 ASSERT( length(READ_FILE($file2)) == 0, "child process writes nothing to $file2");
-
-
 WRITE_FILE($file3, 'use strict;use lib qw(./lib ../lib);
 use Test::Assertions qw(warn);
-ASSERT(1);');
+ASSERT(1,"OK");');
 system("$^X $file3 > $file1 2> $file2");
 ASSERT( ! -s $file1, "child process writes nothing to $file1");
 ASSERT( ! -s $file2, "child process writes nothing to $file2");

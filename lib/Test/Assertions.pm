@@ -2,7 +2,7 @@ package Test::Assertions;
 
 use strict;
 @Test::Assertions::EXPORT = qw(DIED COMPILES EQUAL EQUALS_FILE MATCHES_FILE FILES_EQUAL ASSESS ASSESS_FILE INTERPRET tests READ_FILE WRITE_FILE);
-$Test::Assertions::VERSION = sprintf"%d.%03d", q$Revision: 1.51 $ =~ /: (\d+)\.(\d+)/;
+$Test::Assertions::VERSION = sprintf"%d.%03d", q$Revision: 1.54 $ =~ /: (\d+)\.(\d+)/;
 
 #Define constants
 #(avoid "use constant" to cut compile-time overhead slightly - it *is* measurable)
@@ -237,7 +237,7 @@ sub ASSESS_FILE
 	eval
 	{
 		alarm $timeout if HAVE_ALARM;
-		open (*FH, "$file |") or die("unable to execute $file");
+		open (*FH, "$file |") or die("unable to execute $file - $!");
 		@tests = <FH>;
 		close FH;
 	};
@@ -339,9 +339,10 @@ sub _count_tests
 	my $filename = shift;
 	my $count = 0;
 	local *LI;
-	open (LI, $filename) || die("Unable to open $filename to count tests - $!");
+	open (LI, $filename) || die ("Unable to open $filename to count tests - $!");
 	while(<LI>)
 	{
+		s/\#.+//; # ignore commented-out lines
 		$count++ if(/\bASSERT[\s\(]/);
 		$count++ if($Test::Assertions::use_ok && /\bok[\s\(]/);
 	}
@@ -631,13 +632,20 @@ Runtime testing toolkit
 
 =back
 
+=head1 TODO
+
+	- Declare ASSERT() with :assertions attribute in versions of perl >= 5.9
+	  so it can be optimised away at runtime. It should be possible to declare
+	  the attribute conditionally in a BEGIN block (with eval) for backwards
+	  compatibility
+
 =head1 SEE ALSO
 
 L<Test::Assertions::Manual> - A guide to using Test::Assertions
 
 =head1 VERSION
 
-$Revision: 1.51 $ on $Date: 2005/05/06 12:33:20 $ by $Author: piersk $
+$Revision: 1.54 $ on $Date: 2006/08/07 10:44:42 $ by $Author: simonf $
 
 =head1 AUTHOR
 

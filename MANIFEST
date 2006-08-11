@@ -5,9 +5,11 @@ MANIFEST
 MANIFEST.SKIP
 README
 lib/Test/Assertions.pm
+lib/Test/Assertions/TestScript.pm
 lib/Test/Assertions/Manual.pod
 t/Test-Assertions.t
 t/Test-Assertion_style.pl
+t/Test-Assertions-TestScript.t
 t/pod_coverage.t
 t/fails.pl
 t/pod.t
